@@ -11,6 +11,7 @@ import sys
 # pass in console var -apiKey. 
 # Likewise specify a QUERY env var or -query console var for search terms
 DEFAULT_API_KEY = None
+DEFAULT_PDF_LINKS_FILE = None
 parser = argparse.ArgumentParser(description="Arxive Summarizer by Search Results")
 
 def set_console_variables():
@@ -19,6 +20,7 @@ def set_console_variables():
     parser.add_argument('-apiKey', help="Insert your API Key here if you prefer to pass as a console var")
     parser.add_argument('-query', help="Insert a search query for arxiv results")
     parser.add_argument('-model', help="Gemini model name - defaults to gemini-1.5-flash")
+    parser.add_argument('-file', help="Explicitly feed in article pdf links to summarize via a file - each URL should be separated by a new line")
 
 # Try and use an environment prompt variable
 # If a console variable is set, override environment variable with console var
@@ -47,7 +49,7 @@ def generate_summary(client, model, doc_url, prompt):
         doc_data = httpx.get(doc_url).content
 
         response = client.models.generate_content(
-        model="gemini-1.5-flash",
+        model=model,
         contents=[
             types.Part.from_bytes(
                 data=doc_data,
@@ -67,6 +69,7 @@ def main():
     API_KEY = set_var("API_KEY", args.apiKey, DEFAULT_API_KEY)
     SEARCH_QUERY = set_var("QUERY", args.query, "Large Language Models")
     MODEL = set_var("MODEL", args.model, "gemini-1.5-flash")
+    FILE = set_var("FILE", args.file, DEFAULT_PDF_LINKS_FILE)
 
     if API_KEY == None:
         print("Please specify an API Key via the environment variable API_KEY or console -apiKey")
@@ -80,6 +83,19 @@ def main():
     )
 
     with open("result.txt", "w") as result_file:
+        if FILE != None:
+            print("Summarizing pdfs links from provided file: " + FILE)
+            with open(FILE, "r") as pdf_links:
+                for line in pdf_links:
+                    # Remove whitespace and trailing characters line \n
+                    line = line.strip().rstrip()
+                    summary = generate_summary(client, MODEL, line, PROMPT)
+
+                    result_file.write(f"arXiv URL: {line}\nSummary: {summary}\n\n")
+                    print(f"Summary for {line}:\n{summary}\n")
+
+            return
+
         for result in arxiv.Client().results(search):
             summary = generate_summary(client, MODEL, result.pdf_url, PROMPT)
 
